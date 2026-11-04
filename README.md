@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # NEXUS // OMNIVERSE
 
 A civilization-scale intelligence and simulation operating environment. NEXUS is built as a persistent operating shell around independently loaded workspaces: a procedural city twin, cross-domain telemetry, incident command, deterministic simulation, relationship analysis, reporting and role-governed administration.
@@ -135,3 +136,6 @@ The production build is code-split by route. The 3D geospatial route is the larg
 - Demo persistence is browser-local, not multi-user or server-authoritative.
 - Supabase integration, real authentication and file storage are documented but not wired into this build.
 - No external map tiles or third-party assets are used; the city is generated locally.
+=======
+# nexus-omniverse
+>>>>>>> 6b04f13a272c524e908c9c09e516e107149dc741
