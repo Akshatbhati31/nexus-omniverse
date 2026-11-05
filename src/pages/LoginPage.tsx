@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion'
-import { ArrowRight, Fingerprint, LockKeyhole, ShieldCheck, Sparkles, Wifi } from 'lucide-react'
+import { ArrowRight, Fingerprint, LockKeyhole, ShieldCheck, Sparkles, Wifi, Server, KeyRound } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { DEMO_USERS, DISTRICTS, RIVER_PATH } from '../data/constants'
 import { getRole } from '../data/roles'
 import { useSessionStore } from '../store/useSessionStore'
+import { isBackendLive, isSupabaseConfigured } from '../lib/supabase'
 import { cn } from '../lib/utils'
 
 function AccessCity() {
@@ -92,11 +93,19 @@ export default function LoginPage() {
   const location = useLocation()
   const login = useSessionStore((state) => state.login)
   const loginAs = useSessionStore((state) => state.loginAs)
+  const loginLive = useSessionStore((state) => state.loginLive)
+  const signUpLive = useSessionStore((state) => state.signUpLive)
   const currentUserId = useSessionStore((state) => state.currentUserId)
+  const isLiveAuthenticated = useSessionStore((state) => state.isLiveAuthenticated)
   const roles = useSessionStore((state) => state.roles)
+
+  const [authMode, setAuthMode] = useState<'demo' | 'live'>('demo')
+  const [liveAction, setLiveAction] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('elena.voss@nexus.local')
   const [password, setPassword] = useState('nexus')
+  const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
 
   const from = (location.state as { from?: string } | null)?.from ?? '/overview'
@@ -106,19 +115,46 @@ export default function LoginPage() {
     navigate(target, { replace: true })
   }
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setError('')
+    setSuccess('')
     setLoading(true)
-    window.setTimeout(() => {
-      const result = login(email, password)
-      setLoading(false)
-      if (!result.ok) {
-        setError(result.message ?? 'Authentication failed.')
-        return
+
+    if (authMode === 'demo') {
+      window.setTimeout(() => {
+        const result = login(email, password)
+        setLoading(false)
+        if (!result.ok) {
+          setError(result.message ?? 'Authentication failed.')
+          return
+        }
+        enter()
+      }, 400)
+    } else {
+      // Live Supabase Authentication
+      if (liveAction === 'signin') {
+        const res = await loginLive(email, password)
+        setLoading(false)
+        if (!res.ok) {
+          setError(res.message || 'Supabase authentication failed.')
+          return
+        }
+        enter()
+      } else {
+        const res = await signUpLive(email, password, displayName || email.split('@')[0])
+        setLoading(false)
+        if (!res.ok) {
+          setError(res.message || 'Account registration failed.')
+          return
+        }
+        if (res.confirmationRequired) {
+          setSuccess('Account created. Verification link sent to your email.')
+        } else {
+          enter()
+        }
       }
-      enter()
-    }, 480)
+    }
   }
 
   return (
@@ -139,7 +175,9 @@ export default function LoginPage() {
         <div className="hidden items-center gap-5 font-mono text-[8px] uppercase tracking-[0.12em] text-[var(--muted)] sm:flex">
           <span className="flex items-center gap-1.5 text-[var(--green)]"><Wifi size={10} /> Network nominal</span>
           <span>Aurelia theater</span>
-          <span className="badge badge-amber">Demo mode</span>
+          <span className={cn('badge', isBackendLive() ? 'badge-green' : 'badge-amber')}>
+            {isBackendLive() ? 'Supabase Live' : 'Demo mode'}
+          </span>
         </div>
       </header>
 
@@ -196,7 +234,7 @@ export default function LoginPage() {
             transition={{ delay: 0.18, duration: 0.5 }}
             className="w-full max-w-[420px]"
           >
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between">
               <div>
                 <div className="kicker">Identity access portal</div>
                 <h2 className="mt-2 font-display text-3xl tracking-[-0.04em] text-[var(--text-bright)]">Authenticate</h2>
@@ -206,7 +244,43 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {currentUser ? (
+            {/* Auth Mode Toggle */}
+            <div className="mb-4 grid grid-cols-2 gap-1 border border-[var(--line)] bg-black/40 p-1 font-mono text-[9px]">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('demo')
+                  setEmail('elena.voss@nexus.local')
+                  setPassword('nexus')
+                  setError('')
+                  setSuccess('')
+                }}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 py-1.5 transition-colors',
+                  authMode === 'demo' ? 'bg-[var(--cyan)]/20 text-[var(--cyan)] font-semibold' : 'text-[var(--muted-2)] hover:text-[var(--text)]'
+                )}
+              >
+                <KeyRound size={11} /> SIMULATION DEMO
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('live')
+                  setEmail('')
+                  setPassword('')
+                  setError('')
+                  setSuccess('')
+                }}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 py-1.5 transition-colors',
+                  authMode === 'live' ? 'bg-[var(--cyan)]/20 text-[var(--cyan)] font-semibold' : 'text-[var(--muted-2)] hover:text-[var(--text)]'
+                )}
+              >
+                <Server size={11} /> SUPABASE CLOUD
+              </button>
+            </div>
+
+            {currentUser && !isLiveAuthenticated ? (
               <div className="mb-4 flex items-center justify-between gap-3 border border-[var(--green)]/20 bg-[var(--green-dim)] px-3 py-2.5">
                 <div>
                   <div className="font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--green)]">Active demo session</div>
@@ -219,37 +293,84 @@ export default function LoginPage() {
             ) : null}
 
             <form onSubmit={handleSubmit} className="panel p-5">
+              {authMode === 'live' ? (
+                <div className="mb-4 flex gap-4 border-b border-[var(--line)] pb-2 font-mono text-[9px]">
+                  <button
+                    type="button"
+                    onClick={() => { setLiveAction('signin'); setError(''); }}
+                    className={cn('pb-1', liveAction === 'signin' ? 'border-b-2 border-[var(--cyan)] text-[var(--cyan)] font-bold' : 'text-[var(--muted-2)]')}
+                  >
+                    SIGN IN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setLiveAction('signup'); setError(''); }}
+                    className={cn('pb-1', liveAction === 'signup' ? 'border-b-2 border-[var(--cyan)] text-[var(--cyan)] font-bold' : 'text-[var(--muted-2)]')}
+                  >
+                    REGISTER OPERATOR
+                  </button>
+                </div>
+              ) : null}
+
+              {authMode === 'live' && liveAction === 'signup' ? (
+                <div className="mb-3">
+                  <label className="label-micro mb-1.5 block" htmlFor="login-name">Operator handle / display name</label>
+                  <input
+                    id="login-name"
+                    type="text"
+                    required
+                    className="field"
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    placeholder="Marcus Chen"
+                  />
+                </div>
+              ) : null}
+
               <label className="label-micro mb-1.5 block" htmlFor="login-email">Identity email</label>
               <input
                 id="login-email"
                 type="email"
+                required
                 className="field"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 autoComplete="username"
-                placeholder="analyst@nexus.local"
+                placeholder={authMode === 'demo' ? 'analyst@nexus.local' : 'operator@nexus.defense.gov'}
               />
               <label className="label-micro mb-1.5 mt-4 block" htmlFor="login-password">Access key</label>
               <div className="relative">
                 <input
                   id="login-password"
                   type="password"
+                  required
                   className="field pr-9"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="current-password"
+                  autoComplete={liveAction === 'signup' ? 'new-password' : 'current-password'}
                   placeholder="••••••"
                 />
                 <LockKeyhole size={13} className="absolute right-3 top-2.5 text-[var(--muted-2)]" />
               </div>
               {error ? <div className="mt-3 border border-[var(--red)]/20 bg-[var(--red-dim)] px-2.5 py-2 text-[10px] text-[var(--red)]">{error}</div> : null}
+              {success ? <div className="mt-3 border border-[var(--green)]/20 bg-[var(--green-dim)] px-2.5 py-2 text-[10px] text-[var(--green)]">{success}</div> : null}
               <button type="submit" className="btn btn-primary mt-4 w-full" disabled={loading}>
-                {loading ? 'Establishing session…' : 'Enter operating environment'}
+                {loading
+                  ? 'Establishing handshake…'
+                  : authMode === 'live'
+                  ? liveAction === 'signup'
+                    ? 'Register profile'
+                    : 'Authenticate session'
+                  : 'Enter operating environment'}
                 {!loading ? <ArrowRight size={12} /> : null}
               </button>
               <div className="mt-3 flex items-center justify-between">
-                <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--muted-2)]">Demo credentials prefilled</span>
-                <span className="font-mono text-[8px] text-[var(--muted-2)]">nexus / nexus</span>
+                <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-[var(--muted-2)]">
+                  {authMode === 'demo' ? 'Demo credentials prefilled' : isSupabaseConfigured() ? 'Cloud endpoint active' : 'Offline local mode'}
+                </span>
+                <span className="font-mono text-[8px] text-[var(--muted-2)]">
+                  {authMode === 'demo' ? 'nexus / nexus' : 'TLS / AES_256'}
+                </span>
               </div>
             </form>
 
@@ -265,7 +386,7 @@ export default function LoginPage() {
                     type="button"
                     className={cn(
                       'group flex items-center gap-2.5 border border-[var(--line)] bg-white/[0.015] px-2.5 py-2 text-left transition-colors hover:border-[var(--cyan)]/30 hover:bg-[var(--cyan-dim)]',
-                      identity.id === currentUserId && 'border-[var(--cyan)]/30 bg-[var(--cyan-dim)]',
+                      identity.id === currentUserId && !isLiveAuthenticated && 'border-[var(--cyan)]/30 bg-[var(--cyan-dim)]',
                     )}
                     onClick={() => {
                       loginAs(identity.id)

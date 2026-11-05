@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { ArrowLeft, ShieldAlert } from 'lucide-react'
 import { AppShell } from './components/layout/AppShell'
@@ -89,6 +89,13 @@ function RouteFallback() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const unsubscribe = useSessionStore.getState().initLiveSession()
+    return () => {
+      unsubscribe()
+    }
+  }, [])
+
   return (
     <BrowserRouter>
       <Suspense fallback={<RouteFallback />}>
